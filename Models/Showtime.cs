@@ -11,7 +11,7 @@
         {
             Id = id;
             Movie = movie;
-            Hall = hall;
+            Hall = hall;    
             StartTime = startTime;
         }
     }

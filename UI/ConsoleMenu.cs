@@ -1,5 +1,6 @@
 ﻿using proecti.Helpers;
 using proecti.Services;
+using Spectre.Console;
 
 namespace proecti.UI;
 
@@ -8,58 +9,61 @@ public class ConsoleMenu
     private readonly ShowtimeService _showtimeService;
     private readonly BookingService _bookingService;
     private readonly AdminConsole _adminConsole;
+    private readonly AiBookingAssistant _aiAssistant;
 
-    public ConsoleMenu(ShowtimeService showtimeService, BookingService bookingService, AdminConsole adminConsole)
+    public ConsoleMenu(
+        ShowtimeService showtimeService,
+        BookingService bookingService,
+        AdminConsole adminConsole,
+        AiBookingAssistant aiAssistant)
     {
         _showtimeService = showtimeService;
         _bookingService = bookingService;
         _adminConsole = adminConsole;
+        _aiAssistant = aiAssistant;
     }
 
     public void Run()
     {
         while (true)
         {
-            Console.WriteLine("\n=== კინოთეატრის სისტემა ===");
-            Console.WriteLine("1. სეანსების ნახვა");
-            Console.WriteLine("2. დარბაზის სქემის ნახვა");
-            Console.WriteLine("3. ადგილების დაჯავშნა");
-            Console.WriteLine("4. ჯავშნის გაუქმება");
-            Console.WriteLine("5. ყველა აქტიური ბილეთი");
-            Console.WriteLine("9. ადმინის კონსოლი (საჭიროებს კოდს)");
-            Console.WriteLine("0. გამოსვლა");
-            Console.Write("აირჩიეთ მოქმედება: ");
+            AnsiConsole.WriteLine();
+            AnsiConsole.Write(
+                new Panel("[bold white]კინოთეატრის ბილეთების სისტემა[/]")
+                    .Border(BoxBorder.Rounded)
+                    .BorderColor(Color.Cyan1)
+                    .Padding(1, 0)
+            );
 
-            var choice = Console.ReadLine()?.Trim();
+            var choice = AnsiConsole.Prompt(
+                new SelectionPrompt<string>()
+                    .Title("[cyan]აირჩიეთ მოქმედება (გამოიყენეთ ზემოთ/ქვემოთ ისრები და Enter):[/]")
+                    .HighlightStyle(new Style(Color.Black, Color.Cyan1, Decoration.Bold))
+                    .AddChoices(
+                        "1. სეანსების ნახვა",
+                        "2. დარბაზის სქემის ნახვა",
+                        "3. ადგილების დაჯავშნა (თავად)",
+                        "4. AI ასისტენტით დაჯავშნა (ტექსტით + პოპკორნი/კოლა)",
+                        "5. ჯავშნის გაუქმება",
+                        "6. ყველა აქტიური ბილეთი",
+                        "9. ადმინის კონსოლი (საჭიროებს კოდს)",
+                        "0. გამოსვლა"
+                    )
+            );
 
             try
             {
-                switch (choice)
+                if (choice.StartsWith("1.")) ShowShowtimes();
+                else if (choice.StartsWith("2.")) ShowHallMap();
+                else if (choice.StartsWith("3.")) BookSeatsFlow();
+                else if (choice.StartsWith("4.")) _aiAssistant.StartChat();
+                else if (choice.StartsWith("5.")) CancelBookingFlow();
+                else if (choice.StartsWith("6.")) ShowAllBookings();
+                else if (choice.StartsWith("9.")) _adminConsole.EnterAdminMode();
+                else if (choice.StartsWith("0."))
                 {
-                    case "1":
-                        ShowShowtimes();
-                        break;
-                    case "2":
-                        ShowHallMap();
-                        break;
-                    case "3":
-                        BookSeatsFlow();
-                        break;
-                    case "4":
-                        CancelBookingFlow();
-                        break;
-                    case "5":
-                        ShowAllBookings();
-                        break;
-                    case "9":
-                        _adminConsole.EnterAdminMode();
-                        break;
-                    case "0":
-                        Console.WriteLine("ნახვამდის!");
-                        return;
-                    default:
-                        ConsoleHelper.WriteWarning("არასწორი არჩევანი, სცადეთ თავიდან.");
-                        break;
+                    AnsiConsole.MarkupLine("[bold cyan]ნახვამდის![/]");
+                    return;
                 }
             }
             catch (Exception ex)
@@ -71,27 +75,50 @@ public class ConsoleMenu
 
     private void ShowShowtimes()
     {
-        Console.WriteLine("\n--- მიმდინარე სეანსები ---");
+        ConsoleHelper.WriteHeader("მიმდინარე სეანსები", "cyan");
+
+        var table = new Table()
+            .Border(TableBorder.Rounded)
+            .BorderColor(Color.Grey);
+
+        table.AddColumn("[bold yellow]ID[/]");
+        table.AddColumn("[bold cyan]ფილმი[/]");
+        table.AddColumn("[bold white]ხანგრძლივობა[/]");
+        table.AddColumn("[bold magenta]ასაკი[/]");
+        table.AddColumn("[bold green]დრო[/]");
+        table.AddColumn("[bold blue]დარბაზი[/]");
+        table.AddColumn("[bold white]თავისუფალი ადგილები[/]");
+
         foreach (var s in _showtimeService.Showtimes)
         {
-            Console.WriteLine(
-                $"ID: {s.Id} | {s.Movie.Title} ({s.Movie.DurationMinutes} წთ, {s.Movie.AgeRating}+) | " +
-                $"დრო: {s.StartTime:dd.MM HH:mm} | დარბაზი: {s.Hall.Name} | " +
-                $"თავისუფალია: {s.Hall.FreeSeatsCount}/{s.Hall.TotalSeatsCount}"
+            string seatsColor = s.Hall.FreeSeatsCount > 0 ? "green" : "red";
+            table.AddRow(
+                $"[yellow]{s.Id}[/]",
+                $"[bold]{Markup.Escape(s.Movie.Title)}[/]",
+                $"{s.Movie.DurationMinutes} წთ",
+                $"{s.Movie.AgeRating}+",
+                $"[green]{s.StartTime:dd.MM HH:mm}[/]",
+                Markup.Escape(s.Hall.Name),
+                $"[{seatsColor}]{s.Hall.FreeSeatsCount}/{s.Hall.TotalSeatsCount}[/]"
             );
         }
+
+        AnsiConsole.Write(table);
     }
 
     private void ShowHallMap()
     {
+        ConsoleHelper.WriteHeader("Showtime Selection", "yellow");
         ShowShowtimes();
         int id = ConsoleHelper.ReadInt("შეიყვანეთ სეანსის ID: ");
         var showtime = _showtimeService.GetByIdOrThrow(id);
+        ConsoleHelper.WriteHeader($"დარბაზი: {showtime.Hall.Name} — {showtime.Movie.Title}", "blue");
         showtime.Hall.PrintSeatMap();
     }
 
     private void BookSeatsFlow()
     {
+        ConsoleHelper.WriteHeader("Showtime Selection", "yellow");
         ShowShowtimes();
         int showtimeId = ConsoleHelper.ReadInt("შეიყვანეთ სეანსის ID: ");
         var showtime = _showtimeService.GetByIdOrThrow(showtimeId);
@@ -102,8 +129,11 @@ public class ConsoleMenu
             "სახელი სავალდებულოა."
         );
 
-        Console.Write("შეიყვანეთ ადგილები მძიმით გამოყოფილი (მაგ: A1,A2,B5): ");
-        string rawSeats = Console.ReadLine() ?? "";
+        string rawSeats = ConsoleHelper.ReadNonEmptyString(
+            "შეიყვანეთ ადგილები მძიმით გამოყოფილი (მაგ: A1,A2,B5): ",
+            "მინიმუმ ერთი ადგილი მაინც უნდა მიუთითოთ."
+        );
+
         var seatCodes = rawSeats
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(x => x.ToUpperInvariant())
@@ -116,8 +146,14 @@ public class ConsoleMenu
         }
 
         var booking = _bookingService.BookSeats(showtimeId, customerName, seatCodes);
-        ConsoleHelper.WriteSuccess("\nდაჯავშნა წარმატებით შესრულდა!");
-        Console.WriteLine(booking);
+        ConsoleHelper.WriteSuccess("დაჯავშნა წარმატებით შესრულდა!");
+
+        var ticketPanel = new Panel(Markup.Escape(booking.ToString() ?? ""))
+            .Header("[bold green]ბილეთის დეტალები[/]")
+            .Border(BoxBorder.Double)
+            .BorderColor(Color.Green);
+
+        AnsiConsole.Write(ticketPanel);
     }
 
     private void CancelBookingFlow()
@@ -133,17 +169,19 @@ public class ConsoleMenu
 
     private void ShowAllBookings()
     {
-        Console.WriteLine("\n--- აქტიური ჯავშნები ---");
+        ConsoleHelper.WriteHeader("აქტიური ჯავშნები", "green");
         if (_bookingService.Bookings.Count == 0)
         {
-            Console.WriteLine("აქტიური ჯავშნები არ არის.");
+            ConsoleHelper.WriteWarning("აქტიური ჯავშნები არ არის.");
             return;
         }
 
         foreach (var b in _bookingService.Bookings)
         {
-            Console.WriteLine(b);
-            Console.WriteLine("-----------------------------------------");
+            var panel = new Panel(Markup.Escape(b.ToString() ?? ""))
+                .Border(BoxBorder.Rounded)
+                .BorderColor(Color.Grey);
+            AnsiConsole.Write(panel);
         }
     }
 }

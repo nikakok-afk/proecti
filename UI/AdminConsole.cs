@@ -1,6 +1,7 @@
 ﻿using proecti.Exceptions;
 using proecti.Helpers;
 using proecti.Services;
+using Spectre.Console;
 
 namespace proecti.UI;
 
@@ -33,34 +34,35 @@ public class AdminConsole
     {
         while (true)
         {
-            Console.WriteLine($"\n--- ადმინისტრატორის კონსოლი (დღე: {_showtimeService.CurrentDay:dd.MM.yyyy}) ---");
-            Console.WriteLine("1. ფილმების სიის ნახვა");
-            Console.WriteLine("2. ფილმის დამატება (და სეანსის ჩასმა დღევანდელ გრაფიკში)");
-            Console.WriteLine("3. ფილმის წაშლა");
-            Console.WriteLine("0. მთავარ მენიუში დაბრუნება");
-            Console.Write("აირჩიეთ მოქმედება: ");
+            AnsiConsole.WriteLine();
+            AnsiConsole.Write(
+                new Panel($"[bold yellow]ადმინისტრატორის კონსოლი[/] [grey](დღე: {_showtimeService.CurrentDay:dd.MM.yyyy})[/]")
+                    .Border(BoxBorder.Double)
+                    .BorderColor(Color.Yellow)
+                    .Padding(1, 0)
+            );
 
-            var choice = Console.ReadLine()?.Trim();
+            var choice = AnsiConsole.Prompt(
+                new SelectionPrompt<string>()
+                    .Title("[yellow]აირჩიეთ ადმინის მოქმედება:[/]")
+                    .HighlightStyle(new Style(Color.Black, Color.Yellow, Decoration.Bold))
+                    .AddChoices(
+                        "1. ფილმების სიის ნახვა",
+                        "2. ფილმის დამატება (და სეანსის ჩასმა დღევანდელ გრაფიკში)",
+                        "3. ფილმის წაშლა",
+                        "0. მთავარ მენიუში დაბრუნება"
+                    )
+            );
 
             try
             {
-                switch (choice)
+                if (choice.StartsWith("1.")) ShowMovies();
+                else if (choice.StartsWith("2.")) AddMovieFlow();
+                else if (choice.StartsWith("3.")) RemoveMovieFlow();
+                else if (choice.StartsWith("0."))
                 {
-                    case "1":
-                        ShowMovies();
-                        break;
-                    case "2":
-                        AddMovieFlow();
-                        break;
-                    case "3":
-                        RemoveMovieFlow();
-                        break;
-                    case "0":
-                        ConsoleHelper.WriteWarning("გახვედით ადმინისტრატორის რეჟიმიდან.");
-                        return;
-                    default:
-                        ConsoleHelper.WriteWarning("არასწორი არჩევანი, სცადეთ თავიდან.");
-                        break;
+                    ConsoleHelper.WriteWarning("გახვედით ადმინისტრატორის რეჟიმიდან.");
+                    return;
                 }
             }
             catch (Exception ex)
@@ -72,17 +74,33 @@ public class AdminConsole
 
     private void ShowMovies()
     {
-        Console.WriteLine("\n--- ფილმების სია ---");
+        ConsoleHelper.WriteHeader("ფილმების სია", "yellow");
         if (_showtimeService.Movies.Count == 0)
         {
-            Console.WriteLine("ფილმები არ არის დამატებული.");
+            ConsoleHelper.WriteWarning("ფილმები არ არის დამატებული.");
             return;
         }
 
+        var table = new Table()
+            .Border(TableBorder.Rounded)
+            .BorderColor(Color.Yellow);
+
+        table.AddColumn("[bold yellow]ID[/]");
+        table.AddColumn("[bold white]სახელწოდება[/]");
+        table.AddColumn("[bold cyan]ხანგრძლივობა[/]");
+        table.AddColumn("[bold magenta]ასაკობრივი შეზღუდვა[/]");
+
         foreach (var movie in _showtimeService.Movies)
         {
-            Console.WriteLine($"ID: {movie.Id} | {movie.Title} | ხანგრძლივობა: {movie.DurationMinutes} წთ | ასაკი: {movie.AgeRating}+");
+            table.AddRow(
+                $"[yellow]{movie.Id}[/]",
+                $"[bold]{Markup.Escape(movie.Title)}[/]",
+                $"{movie.DurationMinutes} წთ",
+                $"{movie.AgeRating}+"
+            );
         }
+
+        AnsiConsole.Write(table);
     }
 
     private void AddMovieFlow()
